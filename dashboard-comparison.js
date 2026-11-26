@@ -30,12 +30,12 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get("https://quickpizza.grafana.com/");
+  const normalResponse = http.get("https://quickpizza.grafana.com/");
 
-  const res2 = http.get("https://quickpizza.grafana.com/");
+  const slowResponse = http.get("https://quickpizza.grafana.com/api/delay/1");
 
-  check(res, { "status is 200": (res) => res.status === 200 });
-  check(res2, { "status is 200": (res) => res.status === 200 });
+  check(normalResponse, { "status is 200": (res) => res.status === 200 });
+  check(slowResponse, { "status is 200": (res) => res.status === 200 });
   sleep(1);
 }
 
