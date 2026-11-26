@@ -25,7 +25,7 @@ jobs:
           K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
           K6_CLOUD_STACK: ${{ vars.K6_CLOUD_STACK_SLUG }}
         run: >
-          k6 login cloud --token $K6_CLOUD_TOKEN --stack $K6_CLOUD_STACK        
+          k6 cloud login --token $K6_CLOUD_TOKEN --stack $K6_CLOUD_STACK        
 
       - name: Run k6 test and send results to k6 Cloud
         run: >
