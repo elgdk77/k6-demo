@@ -7,14 +7,9 @@ export const options = {
       executor: "ramping-vus",
       startVUs: 0,
       stages: [
-        { duration: "30s", target: 50 }, // ramp up to 50 VUs over 30 seconds
-        { duration: "30s", target: 100 }, // ramp up to 100 VUs for 30 seconds
-        { duration: "30s", target: 150 }, // ramp up to 150 VUs over 30 seconds
-        { duration: "30s", target: 200 }, // ramp up to 200 VUs over 30 seconds
-        { duration: "30s", target: 300 }, // ramp up to 300 VUs for 30 seconds
-        { duration: "30s", target: 400 }, // ramp up to 400 VUs over 30 seconds
-        { duration: "30s", target: 500 }, // ramp up to 500 VUs for 30 seconds
-        { duration: "30s", target: 0 }, // ramp down to  0 VUs over 30 seconds
+        { duration: "30s", target: 10 }, // ramp up to 50 VUs over 30 seconds
+        { duration: "3m", target: 10 }, // ramp up to 100 VUs for 30 seconds
+        { duration: "30s", target: 0 } // ramp up to 150 VUs over 30 seconds
       ],
     },
   },
