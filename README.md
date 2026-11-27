@@ -7,6 +7,8 @@ The scripts target two public demo APIs, so you can run them without standing up
 - **[QuickPizza](https://quickpizza.grafana.com/)**: Grafana's demo app. Used by the introductory and bottleneck scripts.
 - **[JSONPlaceholder](https://jsonplaceholder.typicode.com/)**: a fake REST API. Used by the "posts flow" tests. You can point it at a different host with `BASE_URL`.
 
+There is also one authenticated journey against a CRM web app (`my-script.js`, generated with Grafana k6 Studio). It needs login credentials, so it won't run out of the box. See [CRM user journey](#crm-user-journey).
+
 > ⚠️ These are shared public services. Keep VU counts and durations modest, and don't aim heavy stress tests at them. To push harder, set `BASE_URL` to a server you own.
 
 ---
@@ -68,6 +70,7 @@ k6-demo/
 │       └── k6-performance-test.yml   # CI pipeline (runs cloud-test.js)
 ├── helpers/
 │   ├── api.js                        # Reusable user flow: runPostsFlow()
+│   ├── crm.js                        # Authenticated CRM journey: runCrmFlow()
 │   └── suite.js                      # Shared scenarios (load, stress) and thresholds
 ├── script.js                         # Simplest GET test against QuickPizza
 ├── post_request.js                   # POST with a JSON body and checks
@@ -76,7 +79,8 @@ k6-demo/
 ├── loads-test.js                     # Load test (shared "load" scenario)
 ├── stress-test.js                    # Stress test (shared "stress" scenario)
 ├── soak-test.js                      # Soak test (steady load held for longer)
-└── cloud-test.js                     # Short ramp test used by CI / Grafana Cloud
+├── cloud-test.js                     # Short ramp test used by CI / Grafana Cloud
+└── my-script.js                      # CRM login journey (k6 Studio), 1 VU
 ```
 
 ---
@@ -154,6 +158,30 @@ k6 run cloud-test.js
 
 > **Note:** `soak-test.js` contains its own inline copy of the posts flow and does not import `helpers/`. The soak in this repo is short (3 minutes) so the demo stays quick. Real soak tests usually run for hours, so raise the hold stage for that.
 
+### CRM user journey
+
+`my-script.js` was generated with Grafana k6 Studio's test-setup wizard and then refactored to call `runCrmFlow()` from `helpers/crm.js`. Each iteration logs in to the CRM app, loads the dashboard data, and logs out:
+
+1. `GET /` and `GET /login`: the HTML pages
+2. `GET /api/auth/me`: session check before login
+3. `POST /api/auth/login` with `CRM_EMAIL` / `CRM_PASSWORD`
+4. `GET /api/auth/me`: session check after login
+5. `GET /api/crm/summary` and `GET /api/crm/jobs`
+6. `GET /api/crm/quotes?status=...` for `new_lead`, `sent`, `accepted`, and `declined`
+7. `POST /api/auth/logout`
+
+Each request has a status check, and the whole journey is wrapped in one `group()`. API calls send an `x-client-id` header that is hard-coded in the helper.
+
+Load profile: ramp to 1 VU over 30s, hold 1 VU for 1m30s, ramp down over 30s (about 2m30s). It uses the shared `thresholds` from `helpers/suite.js`.
+
+Credentials are required. The helper throws at startup if either variable is missing:
+
+```bash
+k6 run -e CRM_EMAIL=you@example.com -e CRM_PASSWORD='...' my-script.js
+```
+
+> ⚠️ This journey logs in as a real account. Use a dedicated test user, keep the VU count low unless you own the environment, and never commit credentials. In CI, store them as secrets.
+
 ---
 
 ## Shared helpers
@@ -173,6 +201,10 @@ export default function () {
 ```
 
 > `runPostsFlow()` already ends with `sleep(1)`. The scripts that call it also `sleep(1)` afterwards, so each iteration has about 2 seconds of think time. Remove one of them if you want 1 second.
+
+### `helpers/crm.js`
+
+Exports `runCrmFlow()`, the authenticated CRM journey described in [CRM user journey](#crm-user-journey). It reads `BASE_URL` (default `https://services-crm.co.uk`), `CRM_EMAIL`, and `CRM_PASSWORD` from the environment. Unlike `runPostsFlow()`, it doesn't sleep, so the calling script controls think time.
 
 ### `helpers/suite.js`
 
@@ -196,6 +228,9 @@ export const options = {
 | Variable | Used by | Default | Description |
 | --- | --- | --- | --- |
 | `BASE_URL` | `helpers/api.js`, `soak-test.js` (and every script that imports the helper) | `https://jsonplaceholder.typicode.com` | Base URL of the API under test. Leave off the trailing slash. |
+| `BASE_URL` | `helpers/crm.js` (`my-script.js`) | `https://services-crm.co.uk` | Base URL of the CRM app. Same variable name, different default. |
+| `CRM_EMAIL` | `helpers/crm.js` | *(none, required)* | Login email for the CRM journey |
+| `CRM_PASSWORD` | `helpers/crm.js` | *(none, required)* | Login password for the CRM journey |
 
 Pass it with `--env` (or `-e`):
 
@@ -409,6 +444,8 @@ Export another function from `helpers/api.js` (for example `runCommentsFlow()`) 
 | `create status is 201` check failing | `BASE_URL` points to an API that doesn't return `201` on `POST /posts`. Adjust the check or the target. |
 | Many `429` or timeout errors | The public demo API is rate-limiting you. Lower the VUs, or point `BASE_URL` at your own server. |
 | `k6 cloud login` fails in CI | `K6_CLOUD_TOKEN` or `K6_CLOUD_STACK_SLUG` is missing from the `staging` environment, or the token has expired. |
+| `Set CRM_EMAIL and CRM_PASSWORD` error on startup | `my-script.js` (or another script importing `helpers/crm.js`) was run without credentials. Pass both with `-e`. |
+| CRM `login 200` check failing | Wrong credentials, or `BASE_URL` was set for a posts-flow test and points the CRM helper at the wrong host. |
 | `--vus`/`--duration` seem ignored | Scripts that define `scenarios` ignore these flags. Edit the stages in `helpers/suite.js` instead. |
 
 ---
